@@ -22,8 +22,7 @@ grid[15] = 'wumpus'  # (3,2)
 grid[16] = 'pit'     # (4,2)
 grid[27] = 'gold'    # (3,1)
 
-# Knowledge base to store state: 'Unknown', 'Safe', 'Wumpus', 'Pit'
-knowledge = [['Unknown' for _ in range(WORLD_SIZE + 2)] for _ in range(WORLD_SIZE + 2)]
+knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
 
 class Agent:
     def __init__(self, x, y, orientation):
@@ -41,7 +40,7 @@ class Agent:
         grid_y = GRID_SIZE - y - 1
         return grid_y * GRID_SIZE + x
 
-    def perceive(self):
+    def perceive(self, x, y):
         index = self.get_index()
         stench = False
         breeze = False
@@ -61,21 +60,21 @@ class Agent:
 
         return [stench, breeze, glitter, bump, scream]
 
-    def update_knowledge(self, percepts):
+    def update_knowledge(self, x, y, percepts):
         stench, breeze, _, _, _ = percepts
+        knowledge[(self.x, self.y)] = 'Safe'
         if not stench and not breeze:
-            knowledge[self.y][self.x] = 'Safe'
             for dx, dy in MOVE_DELTA.values():
                 nx, ny = self.x + dx, self.y + dy
                 if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
-                    if knowledge[ny][nx] == 'Unknown':
-                        knowledge[ny][nx] = 'Safe'
-        elif not self.alive:
+                    if knowledge[(self.x, self.y)] == 'Unknown':
+                        knowledge[(self.x, self.y)] = 'Safe'
+        if not self.alive:
             index = self.get_index()
             if grid[index] == 'wumpus':
-                knowledge[self.y][self.x] = 'Wumpus'
+                knowledge[(self.x, self.y)] = 'Wumpus'
             elif grid[index] == 'pit':
-                knowledge[self.y][self.x] = 'Pit'
+                knowledge[(self.x, self.y)] = 'Pit'
 
     def GoForward(self):
         dx, dy = MOVE_DELTA[self.orientation]
@@ -94,9 +93,9 @@ class Agent:
             bump = True
             print("Bump! Hit a wall.")
 
-        percepts = self.perceive()
+        percepts = self.perceive(self.x, self.y)
         percepts[3] = bump  # Update bump
-        self.update_knowledge(percepts)
+        self.update_knowledge(self.x, self.y, percepts)
         return percepts
 
     def TurnLeft(self):
@@ -167,6 +166,10 @@ def print_grid(grid):
                 row += "A  "
             elif cell == 'gold':
                 row += "G  "
+            elif cell == 'wumpus':
+                row += "W  "
+            elif cell == 'pit':
+                row += "P  "
             else:
                 row += "?  "
         print(row)
@@ -174,10 +177,12 @@ def print_grid(grid):
 
 # Knowledge print function
 def print_knowledge():
-    print("Agent Knowledge:")
-    for y in range(WORLD_SIZE + 1, 0, -1):
-        print(' '.join(f"{knowledge[y][x][0]}" if knowledge[y][x] != 'Unknown' else 'U' for x in range(1, WORLD_SIZE + 1)))
-    print()
+    print("<Knowledge Base>")
+    for y in range(1, WORLD_SIZE + 1):
+        for x in range(1, WORLD_SIZE + 1):
+            status = knowledge.get((x, y), 'Unknown')
+            print(f"[{x},{y}] : {status}")
+    print("\n")
 
 print_grid(grid)
 print_knowledge()
