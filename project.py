@@ -18,9 +18,9 @@ for y in range(1, WORLD_SIZE + 1):
         grid[index] = 'empty'
 
 # Add wumpus and pit for testing
-grid[15] = 'wumpus'  # (3,2)
-grid[16] = 'pit'     # (4,2)
-grid[27] = 'gold'    # (3,1)
+grid[16] = 'wumpus'
+grid[19] = 'pit'
+grid[27] = 'gold'
 
 knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
 
@@ -33,6 +33,10 @@ class Agent:
         self.has_arrow = True
         self.alive = True
         self.scream = False
+
+        # Initialize KB with starting position percept
+        percepts = self.perceive(self.x, self.y)
+        self.update_knowledge(self.x, self.y, percepts)
 
     def get_index(self, x=None, y=None):
         x = x if x is not None else self.x
@@ -62,19 +66,21 @@ class Agent:
 
     def update_knowledge(self, x, y, percepts):
         stench, breeze, _, _, _ = percepts
-        knowledge[(self.x, self.y)] = 'Safe'
-        if not stench and not breeze:
-            for dx, dy in MOVE_DELTA.values():
-                nx, ny = self.x + dx, self.y + dy
-                if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
-                    if knowledge[(self.x, self.y)] == 'Unknown':
-                        knowledge[(self.x, self.y)] = 'Safe'
-        if not self.alive:
+
+        if self.alive:
+            knowledge[(x, y)] = 'Safe'
+            if not stench and not breeze:
+                for dx, dy in MOVE_DELTA.values():
+                    nx, ny = x + dx, y + dy
+                    if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
+                        if knowledge.get((nx, ny), 'Unknown') == 'Unknown':
+                            knowledge[(nx, ny)] = 'Safe'
+        else:
             index = self.get_index()
             if grid[index] == 'wumpus':
-                knowledge[(self.x, self.y)] = 'Wumpus'
+                knowledge[(x, y)] = 'Wumpus'
             elif grid[index] == 'pit':
-                knowledge[(self.x, self.y)] = 'Pit'
+                knowledge[(x, y)] = 'Pit'
 
     def GoForward(self):
         dx, dy = MOVE_DELTA[self.orientation]
@@ -85,6 +91,8 @@ class Agent:
         if 1 <= new_x <= WORLD_SIZE and 1 <= new_y <= WORLD_SIZE:
             self.x = new_x
             self.y = new_y
+            print(f"Moved to ({self.x}, {self.y}) facing {self.orientation}")
+
             index = self.get_index()
             if grid[index] in ['wumpus', 'pit']:
                 self.alive = False
@@ -101,10 +109,12 @@ class Agent:
     def TurnLeft(self):
         idx = DIRECTIONS.index(self.orientation)
         self.orientation = DIRECTIONS[(idx - 1) % 4]
+        print(f"Turned left. Now facing {self.orientation}")
 
     def TurnRight(self):
         idx = DIRECTIONS.index(self.orientation)
         self.orientation = DIRECTIONS[(idx + 1) % 4]
+        print(f"Turned right. Now facing {self.orientation}")
 
     def Grab(self):
         index = self.get_index()
@@ -182,7 +192,7 @@ def print_knowledge():
         for x in range(1, WORLD_SIZE + 1):
             status = knowledge.get((x, y), 'Unknown')
             print(f"[{x},{y}] : {status}")
-    print("\n")
+    print("----------------------------------\n")
 
 print_grid(grid)
 print_knowledge()
@@ -195,3 +205,12 @@ agent.GoForward()  # gold 있는 위치로 이동
 agent.Grab()
 print_grid(grid)
 print_knowledge()
+
+agent.Climb()
+agent.TurnLeft()
+agent.TurnLeft()
+agent.GoForward()
+print_grid(grid)
+agent.GoForward()
+print_grid(grid)
+agent.Climb()
