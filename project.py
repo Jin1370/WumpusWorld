@@ -1,3 +1,4 @@
+import random
 # Constants
 GRID_SIZE = 6
 WORLD_SIZE = 4
@@ -100,14 +101,41 @@ class Agent:
             if grid[index] in ['wumpus', 'pit']:
                 self.alive = False
                 print(f"You encountered a {grid[index]} and died!")
+                # 죽으면 (1,1)로 초기화 (KB와 화살은 유지)
+                self.x, self.y = 1, 1
+                self.orientation = 'East'
         else:
             bump = True
             print("Bump! Hit a wall.")
 
         percepts = self.perceive(self.x, self.y)
         percepts[3] = bump  # Update bump
-        print(percepts)
         self.update_knowledge(self.x, self.y, percepts)
+
+        if (self.x, self.y) == (1, 1) and self.has_gold: # 좌표가 (1,1)이고 금을 가지고 있으면 climb
+            self.Climb()
+        elif percepts[2]:  # 금이 있으면 grab
+            self.Grab()
+        elif self.has_arrow: # 화살이 남아있고, 에이전트가 바라보는 방향의 동일선상에 wumpus가 있으면 shoot
+            dx, dy = MOVE_DELTA[self.orientation]
+            x, y = self.x + dx, self.y + dy
+            while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
+                idx = self.get_index(x, y)
+                if grid[idx] == 'wumpus':
+                    self.Shoot()
+                    break
+                x += dx
+                y += dy
+        elif bump: # 벽에 부딪히면 TurnLeft와 TurnRight 중 랜덤으로 선택해 수행
+            if random.choice([True, False]):
+                self.TurnLeft()
+            else:
+                self.TurnRight()
+
+        print(percepts)
+        print_grid(grid)
+        print_knowledge()
+
         return percepts
 
     def TurnLeft(self):
@@ -122,6 +150,7 @@ class Agent:
 
     def Grab(self):
         index = self.get_index()
+        print(grid[index])
         if grid[index] == 'gold':
             self.has_gold = True
             grid[index] = 'empty'
@@ -145,16 +174,12 @@ class Agent:
                 break
             x += dx
             y += dy
-        print("There was no wumpus.")
 
     def Climb(self):
         if (self.x, self.y) == (1, 1):
             if self.has_gold:
                 print("Climbed out with the gold!")
-            else:
-                print("Can't climb out without gold")
-        else:
-            print("Can't climb here.")
+                exit()
 
 # Initialize agent
 agent = Agent(1, 1, 'East')
@@ -202,26 +227,7 @@ def print_knowledge():
 
 print_grid(grid)
 print_knowledge()
+# 메인 루프
+while agent.alive:
+    agent.GoForward()
 
-agent.GoForward()
-
-print_grid(grid)
-print_knowledge()
-
-agent.GoForward()
-
-print_grid(grid)
-print_knowledge()
-
-#agent.Shoot()
-#+print_grid(grid)
-
-agent.GoForward()
-
-print_grid(grid)
-print_knowledge()
-
-agent.GoForward()
-
-print_grid(grid)
-print_knowledge()
