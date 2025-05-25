@@ -19,8 +19,8 @@ for y in range(1, WORLD_SIZE + 1):
         grid[index] = 'empty'
 
 # Add wumpus and pit for testing
-grid[28] = 'wumpus'
-grid[9] = 'pit'
+grid[9] = 'wumpus'
+grid[28] = 'pit'
 grid[22] = 'gold'
 
 knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
@@ -67,22 +67,33 @@ class Agent:
 
     def update_knowledge(self, x, y, percepts):
         stench, breeze, _, _, scream = percepts
-
         index = self.get_index(x, y)
         cell = grid[index]
 
-        if cell == 'wumpus':
-            knowledge[(x, y)] = 'Wumpus'
-        elif cell == 'pit':
-            knowledge[(x, y)] = 'Pit'
-        else:
+        # 에이전트가 죽지 않았고, 해당 칸이 KB에 Safe로 저장되어 있지 않은 경우 해당 칸 Safe로 업데이트
+        if (cell != 'wumpus') and (cell != 'pit') and (knowledge.get((x, y), 'Unknown') != 'Safe'):
             knowledge[(x, y)] = 'Safe'
-            if not stench and not breeze:
-                for dx, dy in MOVE_DELTA.values():
-                    nx, ny = x + dx, y + dy
-                    if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
-                        if knowledge.get((nx, ny), 'Unknown') == 'Unknown':
-                            knowledge[(nx, ny)] = 'Safe'
+        # stench와 breeze 모두 False이고, 인접한 칸들이 KB에 Safe로 저장되어 있지 않은 경우 인접한 칸 모두 Safe로 업데이트
+        if not stench and not breeze:
+            for dx, dy in MOVE_DELTA.values():
+                nx, ny = x + dx, y + dy
+                if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
+                    neighbor_status = knowledge.get((nx, ny), 'Unknown')
+                    if neighbor_status != 'Safe':
+                        knowledge[(nx, ny)] = 'Safe'
+        else:
+            for dx, dy in MOVE_DELTA.values():
+                nx, ny = x + dx, y + dy
+                if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
+                    neighbor_status = knowledge.get((nx, ny), 'Unknown')
+                    # stench는 True, breeze는 False이고 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybeWumpus로 업데이트
+                    if stench and not breeze:
+                        if neighbor_status == 'Unknown':
+                            knowledge[(nx, ny)] = 'MaybeWumpus'
+                    # stench는 False, breeze는 True이고 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybePit으로 업데이트
+                    elif breeze and not stench:
+                        if neighbor_status == 'Unknown':
+                            knowledge[(nx, ny)] = 'MaybePit'
 
         if scream and hasattr(self, 'wumpus_killed_pos'):
             wx, wy = self.wumpus_killed_pos
@@ -91,6 +102,25 @@ class Agent:
                 print(f"Since Scream==True, update KB: ({wx},{wy}) -> Safe")
             self.scream = False
             self.wumpus_killed_pos = None
+
+    def infer_cause_of_death(self, x, y):
+        cause = knowledge.get((x, y), 'Unknown')
+        if cause == 'MaybeWumpus':
+            print(f"Agent likely died from Wumpus at ({x},{y}). Updating KB.")
+            knowledge[(x, y)] = 'Wumpus'
+            # KB의 모든 MaybeWumpus를 Unknown으로
+            for key, value in knowledge.items():
+                if value == 'MaybeWumpus':
+                    knowledge[key] = 'Unknown'
+        elif cause == 'MaybePit':
+            print(f"Agent likely died from Pit at ({x},{y}). Updating KB.")
+            knowledge[(x, y)] = 'Pit'
+            # KB의 모든 MaybePit을 Unknown으로
+            for key, value in knowledge.items():
+                if value == 'MaybePit':
+                    knowledge[key] = 'Unknown'
+        else:
+            print(f"Agent died at ({x},{y}), cause unknown.")
 
     def GoForward(self):
         dx, dy = MOVE_DELTA[self.orientation]
@@ -115,6 +145,7 @@ class Agent:
             index = self.get_index()
             if grid[index] in ['wumpus', 'pit']:
                 print(f"You encountered a {grid[index]} and died! Restart at (1,1)")
+                self.infer_cause_of_death(self.x, self.y)  # 추가: 죽음 추론
                 percepts = self.perceive(self.x, self.y)
                 self.update_knowledge(self.x, self.y, percepts)
                 # 죽으면 (1,1)로 초기화 (KB와 화살은 유지)
@@ -243,6 +274,10 @@ def print_grid(grid):
                         row += "W! "
                     elif status == 'Pit':
                         row += "P! "
+                    elif status == 'MaybeWumpus':
+                        row += "W? "
+                    elif status == 'MaybePit':
+                        row += "P? "
                     else:
                         row += "?  "
                 else:
