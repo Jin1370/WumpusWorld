@@ -21,7 +21,7 @@ for y in range(1, WORLD_SIZE + 1):
 # Add wumpus and pit for testing
 grid[28] = 'wumpus'
 grid[9] = 'pit'
-grid[21] = 'gold'
+grid[22] = 'gold'
 
 knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
 
@@ -31,7 +31,7 @@ class Agent:
         self.y = y
         self.orientation = orientation
         self.has_gold = False
-        self.has_arrow = True
+        self.arrow_count = 3
         self.scream = False
 
         # Initialize KB with starting position percept
@@ -139,7 +139,7 @@ class Agent:
                 self.TurnLeft()
             else:
                 self.TurnRight()
-        elif self.has_arrow:  # 화살이 남아있고, 에이전트가 바라보는 방향의 동일선상에 wumpus가 있으면 shoot
+        elif self.arrow_count > 0:  # 화살이 남아있고, 에이전트가 바라보는 방향의 동일선상에 wumpus가 있으면 shoot
             dx, dy = MOVE_DELTA[self.orientation]
             x, y = self.x + dx, self.y + dy
             while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
@@ -177,10 +177,11 @@ class Agent:
             print("No gold here.")
 
     def Shoot(self):
-        if not self.has_arrow:
+        if self.arrow_count <= 0:
             print("No arrows left.")
             return
-        self.has_arrow = False
+        self.arrow_count -= 1
+        print(f"Shot an arrow! Remaining arrows: {self.arrow_count}")
         dx, dy = MOVE_DELTA[self.orientation]
         x, y = self.x + dx, self.y + dy
         while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
@@ -188,7 +189,7 @@ class Agent:
             if grid[idx] == 'wumpus':
                 grid[idx] = 'empty'
                 self.scream = True
-                self.wumpus_killed_pos = (x, y)  # 🔥 죽인 위치 저장!
+                self.wumpus_killed_pos = (x, y)
                 print(f"You killed the wumpus at ({x},{y})!")
                 break
             x += dx
@@ -218,19 +219,34 @@ def print_grid(grid):
         row = ""
         for x in range(GRID_SIZE):
             index = y * GRID_SIZE + x
-            cell = grid[index]
-            if cell == 'wall':
+
+            kb_x = x
+            kb_y = GRID_SIZE - y - 1
+            status = knowledge.get((kb_x, kb_y), 'Unknown')
+
+
+            if grid[index] == 'wall':
                 row += "#  "
-            elif cell == 'A':
+            elif grid[index] == 'A':
                 row += "A  "
-            elif cell == 'gold':
+            elif grid[index] == 'gold':
                 row += "G  "
-            elif cell == 'wumpus':
+            elif grid[index] == 'wumpus':
                 row += "W  "
-            elif cell == 'pit':
+            elif grid[index] == 'pit':
                 row += "P  "
             else:
-                row += "?  "
+                if (1 <= kb_x <= WORLD_SIZE) and (1 <= kb_y <= WORLD_SIZE):
+                    if status == 'Safe':
+                        row += "S  "
+                    elif status == 'Wumpus':
+                        row += "W! "
+                    elif status == 'Pit':
+                        row += "P! "
+                    else:
+                        row += "?  "
+                else:
+                    row += "?  "
         print(row)
     print("----------------------------------")
 
