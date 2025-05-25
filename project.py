@@ -120,8 +120,7 @@ class Agent:
             dx, dy = MOVE_DELTA[self.orientation]
             x, y = self.x + dx, self.y + dy
             while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
-                idx = self.get_index(x, y)
-                if grid[idx] == 'wumpus':
+                if knowledge.get((x, y)) == 'Wumpus':
                     self.Shoot()
                     break
                 x += dx
