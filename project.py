@@ -18,8 +18,8 @@ for y in range(1, WORLD_SIZE + 1):
         grid[index] = 'empty'
 
 # Add wumpus and pit for testing
-grid[16] = 'wumpus'
-grid[19] = 'pit'
+grid[28] = 'wumpus'
+grid[16] = 'pit'
 grid[27] = 'gold'
 
 knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
@@ -32,12 +32,14 @@ class Agent:
         self.has_gold = False
         self.has_arrow = True
         self.alive = True
-        self.scream = False
+        self.scream = False # 이거 지워도되나
 
         # Initialize KB with starting position percept
         percepts = self.perceive(self.x, self.y)
+        print(percepts)
         self.update_knowledge(self.x, self.y, percepts)
 
+    # 매개변수로 x,y를 주면 해당 좌표의 index 반환, 안주면 현재 좌표의 index 반환
     def get_index(self, x=None, y=None):
         x = x if x is not None else self.x
         y = y if y is not None else self.y
@@ -66,9 +68,10 @@ class Agent:
 
     def update_knowledge(self, x, y, percepts):
         stench, breeze, _, _, _ = percepts
-
+        # 죽지 않았다면 해당 좌표 상태를 Safe로 저장
         if self.alive:
             knowledge[(x, y)] = 'Safe'
+            # Stench와 Breeze 둘 다 perceive되지 않았다면 인접한 좌표를 모두 Safe로 저장
             if not stench and not breeze:
                 for dx, dy in MOVE_DELTA.values():
                     nx, ny = x + dx, y + dy
@@ -103,6 +106,7 @@ class Agent:
 
         percepts = self.perceive(self.x, self.y)
         percepts[3] = bump  # Update bump
+        print(percepts)
         self.update_knowledge(self.x, self.y, percepts)
         return percepts
 
@@ -141,13 +145,14 @@ class Agent:
                 break
             x += dx
             y += dy
+        print("There was no wumpus.")
 
     def Climb(self):
         if (self.x, self.y) == (1, 1):
             if self.has_gold:
                 print("Climbed out with the gold!")
             else:
-                print("Climbed out empty-handed.")
+                print("Can't climb out without gold")
         else:
             print("Can't climb here.")
 
@@ -165,6 +170,7 @@ def update_grid_with_agent():
 # Grid print function
 def print_grid(grid):
     update_grid_with_agent()
+    print("----------------------------------\n<Grid>")
     for y in range(GRID_SIZE):
         row = ""
         for x in range(GRID_SIZE):
@@ -183,34 +189,39 @@ def print_grid(grid):
             else:
                 row += "?  "
         print(row)
-    print()
+    print("----------------------------------")
 
 # Knowledge print function
 def print_knowledge():
-    print("<Knowledge Base>")
+    print("----------------------------------\n<Knowledge Base>")
     for y in range(1, WORLD_SIZE + 1):
         for x in range(1, WORLD_SIZE + 1):
             status = knowledge.get((x, y), 'Unknown')
             print(f"[{x},{y}] : {status}")
-    print("----------------------------------\n")
+    print("----------------------------------")
 
 print_grid(grid)
 print_knowledge()
 
 agent.GoForward()
+
 print_grid(grid)
 print_knowledge()
 
-agent.GoForward()  # gold 있는 위치로 이동
-agent.Grab()
+agent.GoForward()
+
 print_grid(grid)
 print_knowledge()
 
-agent.Climb()
-agent.TurnLeft()
-agent.TurnLeft()
+#agent.Shoot()
+#+print_grid(grid)
+
 agent.GoForward()
+
 print_grid(grid)
+print_knowledge()
+
 agent.GoForward()
+
 print_grid(grid)
-agent.Climb()
+print_knowledge()
