@@ -132,22 +132,100 @@ class Agent:
                 if value['status'] == 'MaybeWP':
                     value['status'] = 'Unknown'
 
+    ###################################
+
+    def choose_next_direction(self):
+        priorities = []
+
+        # 우선순위 정의
+        if not self.has_gold:
+            priorities = [
+                ('Safe', False),
+                ('MaybeW', False),
+                ('MaybeP', False),
+                ('MaybeWP', False),
+                ('Safe', True),
+                ('WumpusPit', True)
+            ]
+        else:
+            priorities = [
+                ('Safe', None),  # True or False 모두 포함
+                ('MaybeW', False),
+                ('MaybeP', False),
+                ('MaybeWP', False),
+                ('WumpusPit', True)
+            ]
+
+        best_target = None
+        best_dir = None
+        best_candidates = []  # 후보를 저장할 리스트
+
+        for status, visited in priorities:
+            candidates = []  # 각 레벨별 후보 리스트
+            for dir, (dx, dy) in MOVE_DELTA.items():
+                nx, ny = self.x + dx, self.y + dy
+                if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
+                    cell = knowledge.get((nx,ny), {})
+
+                    # Status 체크
+                    cell_status = cell.get('status')
+                    if status == 'WumpusPit':
+                        if cell_status in ['Wumpus', 'Pit', 'WumpusOrPit']:
+                            pass
+                        else:
+                            continue
+                    else:
+                        if cell_status != status:
+                            continue
+
+                    # Visited 체크
+                    if visited is not None and cell.get('visited') != visited:
+                        continue
+
+                    candidates.append((nx, ny, dir))
+
+            if candidates:
+                best_candidates = candidates
+                break  # 우선순위 레벨에서 후보 찾았으면 종료
+
+        # 후보 중 랜덤 선택
+        if best_candidates:
+            target = random.choice(best_candidates)
+            target_x, target_y, best_dir = target
+
+            self.turn_to_direction(best_dir)
+            print(f"방향 전환: {best_dir}를 바라봄")
+        else:
+            print("움직일 칸을 찾지 못함 (모두 방문했거나 위험)")
+
+    def turn_to_direction(self, target_dir):
+        # 현재 방향과 target_dir 비교해서 방향 회전
+        current_idx = DIRECTIONS.index(self.orientation)
+        target_idx = DIRECTIONS.index(target_dir)
+
+        diff = (target_idx - current_idx) % 4
+        if diff == 0:
+            pass  # 이미 바라보고 있음
+        elif diff == 1:
+            self.TurnRight()
+        elif diff == 2:
+            self.TurnRight()
+            self.TurnRight()
+        elif diff == 3:
+            self.TurnLeft()
+
+###################################
     def GoForward(self):
+        #next_status = knowledge.get((new_x, new_y), {}).get('status', 'Unknown')
+        #if next_status != 'Safe':
+        self.choose_next_direction()
+
         dx, dy = MOVE_DELTA[self.orientation]
         new_x = self.x + dx
         new_y = self.y + dy
         bump = False
 
-        # 다음 칸에 위험 표시가 되어 있는지 KB에서 확인
-        danger_status = knowledge.get((new_x, new_y), {}).get('status', 'Unknown')
-        if danger_status in ['Wumpus', 'Pit']:
-            print(f"Knowledge says danger at ({new_x},{new_y}): {danger_status}. Changing direction!")
-            if random.choice([True, False]):
-                self.TurnLeft()
-            else:
-                self.TurnRight()
-
-        elif 1 <= new_x <= WORLD_SIZE and 1 <= new_y <= WORLD_SIZE:
+        if 1 <= new_x <= WORLD_SIZE and 1 <= new_y <= WORLD_SIZE:
             self.x = new_x
             self.y = new_y
             print(f"Moved to ({self.x}, {self.y}) facing {self.orientation}")
