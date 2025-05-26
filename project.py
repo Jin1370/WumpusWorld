@@ -67,58 +67,60 @@ class Agent:
 
     def update_knowledge(self, x, y, percepts):
         stench, breeze, _, _, scream = percepts
+
+        # 해당 칸이 KB에 없으면 기본값으로 초기화
+        knowledge.setdefault((x, y), {'status': 'Unknown', 'visited': False})
+
+        # 방문 여부 업데이트
+        knowledge[(x, y)]['visited'] = True
+
         index = self.get_index(x, y)
         cell = grid[index]
 
-        # 에이전트가 죽지 않았고, 해당 칸이 KB에 Safe로 저장되어 있지 않은 경우 해당 칸 Safe로 업데이트
+        # 에이전트가 죽지 않았고, 해당 칸이 KB에 Safe로 저장되어 있지 않은 경우 해당 칸 state를 Safe로 업데이트
         if (cell != 'wumpus') and (cell != 'pit') and (knowledge.get((x, y), 'Unknown') != 'Safe'):
-            knowledge[(x, y)] = 'Safe'
-        # stench와 breeze 모두 False이고, 인접한 칸들이 KB에 Safe로 저장되어 있지 않은 경우 인접한 칸 모두 Safe로 업데이트
-        if not stench and not breeze:
-            for dx, dy in MOVE_DELTA.values():
-                nx, ny = x + dx, y + dy
-                if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
-                    neighbor_status = knowledge.get((nx, ny), 'Unknown')
-                    if neighbor_status != 'Safe':
-                        knowledge[(nx, ny)] = 'Safe'
-        else:
-            for dx, dy in MOVE_DELTA.values():
-                nx, ny = x + dx, y + dy
-                if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
-                    neighbor_status = knowledge.get((nx, ny), 'Unknown')
-                    # stench는 True, breeze는 False이고 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybeWumpus로 업데이트
-                    if stench and not breeze:
-                        if neighbor_status == 'Unknown':
-                            knowledge[(nx, ny)] = 'MaybeWumpus'
-                    # stench는 False, breeze는 True이고 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybePit으로 업데이트
-                    elif breeze and not stench:
-                        if neighbor_status == 'Unknown':
-                            knowledge[(nx, ny)] = 'MaybePit'
+            knowledge[(x, y)]['status'] = 'Safe'
+        # 인접한 칸 state 업데이트
+        for dx, dy in MOVE_DELTA.values():
+            nx, ny = x + dx, y + dy
+            if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
+                knowledge.setdefault((nx, ny), {'status': 'Unknown', 'visited': False})
+                neighbor_status = knowledge[(nx, ny)]['status']
+                # stench와 breeze 모두 False이고, 인접한 칸들이 KB에 Safe로 저장되어 있지 않은 경우 인접한 칸 모두 Safe로 업데이트
+                if not stench and not breeze and neighbor_status != 'Safe':
+                    knowledge[(nx, ny)]['status'] = 'Safe'
+                # stench는 True, breeze는 False이고 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybeWumpus로 업데이트
+                elif stench and not breeze and neighbor_status == 'Unknown':
+                    knowledge[(nx, ny)]['status'] = 'MaybeWumpus'
+                # stench는 False, breeze는 True이고 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybePit으로 업데이트
+                elif breeze and not stench and neighbor_status == 'Unknown':
+                    knowledge[(nx, ny)]['status'] = 'MaybePit'
 
         if scream and hasattr(self, 'wumpus_killed_pos'):
             wx, wy = self.wumpus_killed_pos
-            if knowledge.get((wx, wy)) == 'Wumpus':
-                knowledge[(wx, wy)] = 'Safe'
+            if knowledge.get((wx, wy), {}).get('status') == 'Wumpus':
+                knowledge[(wx, wy)]['status'] = 'Safe'
                 print(f"Since Scream==True, update KB: ({wx},{wy}) -> Safe")
             self.scream = False
             self.wumpus_killed_pos = None
 
+
     def infer_cause_of_death(self, x, y):
-        cause = knowledge.get((x, y), 'Unknown')
+        cause = knowledge.get((x, y), {}).get('status', 'Unknown')
         if cause == 'MaybeWumpus':
             print(f"Agent likely died from Wumpus at ({x},{y}). Updating KB.")
-            knowledge[(x, y)] = 'Wumpus'
+            knowledge[(x, y)]['status'] = 'Wumpus'
             # KB의 모든 MaybeWumpus를 Unknown으로
             for key, value in knowledge.items():
-                if value == 'MaybeWumpus':
-                    knowledge[key] = 'Unknown'
+                if value['status'] == 'MaybeWumpus':
+                    value['status'] = 'Unknown'
         elif cause == 'MaybePit':
             print(f"Agent likely died from Pit at ({x},{y}). Updating KB.")
-            knowledge[(x, y)] = 'Pit'
+            knowledge[(x, y)]['status'] = 'Pit'
             # KB의 모든 MaybePit을 Unknown으로
             for key, value in knowledge.items():
-                if value == 'MaybePit':
-                    knowledge[key] = 'Unknown'
+                if value['status'] == 'MaybePit':
+                    value['status'] = 'Unknown'
         else:
             print(f"Agent died at ({x},{y}), cause unknown.")
 
@@ -129,9 +131,9 @@ class Agent:
         bump = False
 
         # 다음 칸에 위험 표시가 되어 있는지 KB에서 확인
-        danger = knowledge.get((new_x, new_y))
-        if danger in ['Wumpus', 'Pit']:
-            print(f"Knowledge says danger at ({new_x},{new_y}): {danger}. Changing direction!")
+        danger_status = knowledge.get((new_x, new_y), {}).get('status', 'Unknown')
+        if danger_status in ['Wumpus', 'Pit']:
+            print(f"Knowledge says danger at ({new_x},{new_y}): {danger_status}. Changing direction!")
             if random.choice([True, False]):
                 self.TurnLeft()
             else:
@@ -174,7 +176,7 @@ class Agent:
             dx, dy = MOVE_DELTA[self.orientation]
             x, y = self.x + dx, self.y + dy
             while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
-                if knowledge.get((x, y)) == 'Wumpus':
+                if knowledge.get((x, y), {}).get('status', '') == 'Wumpus':
                     self.Shoot()
                     percepts[4] = self.scream # Shoot 실행시 wumpus를 제거하고 scream==True로 바꾸기 때문에 갱신 필요
                     break
@@ -253,8 +255,7 @@ def print_grid(grid):
 
             kb_x = x
             kb_y = GRID_SIZE - y - 1
-            status = knowledge.get((kb_x, kb_y), 'Unknown')
-
+            status = knowledge.get((kb_x, kb_y), {}).get('status', 'Unknown')
 
             if grid[index] == 'wall':
                 row += "#  "
@@ -290,9 +291,13 @@ def print_knowledge():
     print("----------------------------------\n<Knowledge Base>")
     for y in range(1, WORLD_SIZE + 1):
         for x in range(1, WORLD_SIZE + 1):
-            status = knowledge.get((x, y), 'Unknown')
-            print(f"[{x},{y}] : {status}")
+            info = knowledge.get((x, y), {'status': 'Unknown', 'visited': False})
+            status = info['status']
+            visited = 'T' if info['visited'] else 'F'
+            print(f"[{x},{y}] : {status}, {visited}")
     print("----------------------------------\n")
+
+
 
 def print_percepts(percepts):
     stench, breeze, glitter, bump, scream = percepts
