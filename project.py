@@ -19,7 +19,7 @@ for y in range(1, WORLD_SIZE + 1):
         grid[index] = 'empty'
 
 # Add wumpus and pit for testing
-grid[9] = 'wumpus'
+grid[21] = 'wumpus'
 grid[28] = 'pit'
 grid[22] = 'gold'
 
@@ -89,12 +89,15 @@ class Agent:
                 # stench와 breeze 모두 False이고, 인접한 칸들이 KB에 Safe로 저장되어 있지 않은 경우 인접한 칸 모두 Safe로 업데이트
                 if not stench and not breeze and neighbor_status != 'Safe':
                     knowledge[(nx, ny)]['status'] = 'Safe'
-                # stench는 True, breeze는 False이고 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybeWumpus로 업데이트
-                elif stench and not breeze and neighbor_status == 'Unknown':
-                    knowledge[(nx, ny)]['status'] = 'MaybeWumpus'
-                # stench는 False, breeze는 True이고 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybePit으로 업데이트
-                elif breeze and not stench and neighbor_status == 'Unknown':
-                    knowledge[(nx, ny)]['status'] = 'MaybePit'
+                # stench는 True, breeze는 False이고 인접한 칸들이 KB에 Unknown 또는 MaybeWP로 저장되어 있는 경우 인접한 칸 모두 MaybeW로 업데이트
+                elif stench and not breeze and neighbor_status in ['Unknown', 'MaybeWP']:
+                    knowledge[(nx, ny)]['status'] = 'MaybeW'
+                # stench는 False, breeze는 True이고 인접한 칸들이 KB에 Unknown 또는 MaybeWP 저장되어 있는 경우 인접한 칸 모두 MaybeP으로 업데이트
+                elif breeze and not stench and neighbor_status in ['Unknown', 'MaybeWP']:
+                    knowledge[(nx, ny)]['status'] = 'MaybeP'
+                # stench와 breeze 모두 True이고, 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybeWP로 업데이트
+                elif breeze and stench and neighbor_status == 'Unknown':
+                    knowledge[(nx, ny)]['status'] = 'MaybeWP'
 
         if scream and hasattr(self, 'wumpus_killed_pos'):
             wx, wy = self.wumpus_killed_pos
@@ -107,19 +110,19 @@ class Agent:
 
     def infer_cause_of_death(self, x, y):
         cause = knowledge.get((x, y), {}).get('status', 'Unknown')
-        if cause == 'MaybeWumpus':
+        if cause == 'MaybeW':
             print(f"Agent likely died from Wumpus at ({x},{y}). Updating KB.")
             knowledge[(x, y)]['status'] = 'Wumpus'
-            # KB의 모든 MaybeWumpus를 Unknown으로
+            # KB의 모든 MaybeW를 Unknown으로
             for key, value in knowledge.items():
-                if value['status'] == 'MaybeWumpus':
+                if value['status'] == 'MaybeW':
                     value['status'] = 'Unknown'
-        elif cause == 'MaybePit':
+        elif cause == 'MaybeP':
             print(f"Agent likely died from Pit at ({x},{y}). Updating KB.")
             knowledge[(x, y)]['status'] = 'Pit'
-            # KB의 모든 MaybePit을 Unknown으로
+            # KB의 모든 MaybeP을 Unknown으로
             for key, value in knowledge.items():
-                if value['status'] == 'MaybePit':
+                if value['status'] == 'MaybeP':
                     value['status'] = 'Unknown'
         else:
             print(f"Agent died at ({x},{y}), cause unknown.")
@@ -275,10 +278,12 @@ def print_grid(grid):
                         row += "W! "
                     elif status == 'Pit':
                         row += "P! "
-                    elif status == 'MaybeWumpus':
+                    elif status == 'MaybeW':
                         row += "W? "
-                    elif status == 'MaybePit':
+                    elif status == 'MaybeP':
                         row += "P? "
+                    elif status == 'MaybeWP':
+                        row += "WP?"
                     else:
                         row += "?  "
                 else:
