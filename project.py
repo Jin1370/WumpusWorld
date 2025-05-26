@@ -124,8 +124,13 @@ class Agent:
             for key, value in knowledge.items():
                 if value['status'] == 'MaybeP':
                     value['status'] = 'Unknown'
-        else:
+        elif cause == 'MaybeWP':
             print(f"Agent died at ({x},{y}), cause unknown.")
+            knowledge[(x, y)]['status'] = 'WumpusOrPit'
+            # KB의 모든 MaybeWP을 Unknown으로
+            for key, value in knowledge.items():
+                if value['status'] == 'MaybeWP':
+                    value['status'] = 'Unknown'
 
     def GoForward(self):
         dx, dy = MOVE_DELTA[self.orientation]
@@ -278,6 +283,8 @@ def print_grid(grid):
                         row += "W! "
                     elif status == 'Pit':
                         row += "P! "
+                    elif status == 'WumpusOrPit':
+                        row += "WP!"
                     elif status == 'MaybeW':
                         row += "W? "
                     elif status == 'MaybeP':
