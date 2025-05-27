@@ -18,11 +18,29 @@ for y in range(1, WORLD_SIZE + 1):
         index = grid_y * GRID_SIZE + x
         grid[index] = 'empty'
 
-# Add wumpus and pit for testing
-grid[27] = 'wumpus'
-grid[15] = 'wumpus'
-grid[19] = 'pit'
-grid[16] = 'gold'
+        if index == 25:  # (1,1)에는 아무것도 생성되지 않음
+            continue
+        has_wumpus = random.random() < 0.1
+        has_pit = random.random() < 0.1
+
+        if has_pit:  # 둘 다 True일 경우 Pit 우선으로 처리
+            grid[index] = 'pit'
+        elif has_wumpus:
+            grid[index] = 'wumpus'
+        else:
+            grid[index] = 'empty'
+
+# Gold 배치: Wumpus, Pit이 없는 곳 중 하나
+safe_indices = [i for i in range(GRID_SIZE * GRID_SIZE) if grid[i] == 'empty' and i != 25]
+if safe_indices:
+    gold_index = random.choice(safe_indices)
+    grid[gold_index] = 'gold'
+'''
+#grid[19] = 'wumpus'
+grid[26] = 'wumpus'
+grid[15] = 'pit'
+grid[8] = 'gold'
+'''
 
 knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
 
@@ -79,27 +97,27 @@ class Agent:
         index = self.get_index(x, y)
         cell = grid[index]
 
-        # 에이전트가 죽지 않았고, 해당 칸이 KB에 Safe로 저장되어 있지 않은 경우 해당 칸 state를 Safe로 업데이트
-        if (cell != 'wumpus') and (cell != 'pit') and (knowledge.get((x, y), 'Unknown') != 'Safe'):
-            knowledge[(x, y)]['status'] = 'Safe'
-        # 인접한 칸 state 업데이트
-        for dx, dy in MOVE_DELTA.values():
-            nx, ny = x + dx, y + dy
-            if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
-                knowledge.setdefault((nx, ny), {'status': 'Unknown', 'visited': False})
-                neighbor_status = knowledge[(nx, ny)]['status']
-                # stench와 breeze 모두 False이고, 인접한 칸들이 KB에 Safe로 저장되어 있지 않은 경우 인접한 칸 모두 Safe로 업데이트
-                if not stench and not breeze and neighbor_status != 'Safe':
-                    knowledge[(nx, ny)]['status'] = 'Safe'
-                # stench는 True, breeze는 False이고 인접한 칸들이 KB에 Unknown 또는 MaybeWP로 저장되어 있는 경우 인접한 칸 모두 MaybeW로 업데이트
-                elif stench and not breeze and neighbor_status in ['Unknown', 'MaybeWP']:
-                    knowledge[(nx, ny)]['status'] = 'MaybeW'
-                # stench는 False, breeze는 True이고 인접한 칸들이 KB에 Unknown 또는 MaybeWP 저장되어 있는 경우 인접한 칸 모두 MaybeP으로 업데이트
-                elif breeze and not stench and neighbor_status in ['Unknown', 'MaybeWP']:
-                    knowledge[(nx, ny)]['status'] = 'MaybeP'
-                # stench와 breeze 모두 True이고, 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybeWP로 업데이트
-                elif breeze and stench and neighbor_status == 'Unknown':
-                    knowledge[(nx, ny)]['status'] = 'MaybeWP'
+        if (cell != 'wumpus') and (cell != 'pit'):  # 에이전트가 죽지 않은 경우
+            if knowledge.get((x, y), 'Unknown') != 'Safe':
+                knowledge[(x, y)]['status'] = 'Safe'
+            # 인접한 칸 state 업데이트
+            for dx, dy in MOVE_DELTA.values():
+                nx, ny = x + dx, y + dy
+                if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
+                    knowledge.setdefault((nx, ny), {'status': 'Unknown', 'visited': False})
+                    neighbor_status = knowledge[(nx, ny)]['status']
+                    # stench와 breeze 모두 False이고, 인접한 칸들이 KB에 Safe로 저장되어 있지 않은 경우 인접한 칸 모두 Safe로 업데이트
+                    if not stench and not breeze and neighbor_status != 'Safe':
+                        knowledge[(nx, ny)]['status'] = 'Safe'
+                    # stench는 True, breeze는 False이고 인접한 칸들이 KB에 Unknown 또는 MaybeWP로 저장되어 있는 경우 인접한 칸 모두 MaybeW로 업데이트
+                    elif stench and not breeze and neighbor_status in ['Unknown', 'MaybeWP']:
+                        knowledge[(nx, ny)]['status'] = 'MaybeW'
+                    # stench는 False, breeze는 True이고 인접한 칸들이 KB에 Unknown 또는 MaybeWP 저장되어 있는 경우 인접한 칸 모두 MaybeP으로 업데이트
+                    elif breeze and not stench and neighbor_status in ['Unknown', 'MaybeWP']:
+                        knowledge[(nx, ny)]['status'] = 'MaybeP'
+                    # stench와 breeze 모두 True이고, 인접한 칸들이 KB에 Unknown으로 저장되어 있는 경우 인접한 칸 모두 MaybeWP로 업데이트
+                    elif breeze and stench and neighbor_status == 'Unknown':
+                        knowledge[(nx, ny)]['status'] = 'MaybeWP'
 
         if scream and hasattr(self, 'wumpus_killed_pos'):
             wx, wy = self.wumpus_killed_pos
@@ -112,7 +130,6 @@ class Agent:
                 print(f"Since Scream==True, update KB")
             self.scream = False
             self.wumpus_killed_pos = None
-
 
     def infer_cause_of_death(self, x, y):
         cause = knowledge.get((x, y), {}).get('status', 'Unknown')
@@ -200,9 +217,9 @@ class Agent:
             #        best_candidates.append((nx, ny, dir))
             target = random.choice(best_candidates)
             target_x, target_y, best_dir = target
-
+            print(f"select direction: {best_dir}")
             self.turn_to_direction(best_dir)
-            print(f"방향 전환: {best_dir}를 바라봄")
+
         else:
             print("움직일 칸을 찾지 못함 (모두 방문했거나 위험)")
 
@@ -236,17 +253,17 @@ class Agent:
             self.x = new_x
             self.y = new_y
             self.move_count += 1
-            print(f"Moved to ({self.x}, {self.y}) facing {self.orientation}")
+            print(f"Moved to ({self.x}, {self.y})")
 
             index = self.get_index()
             if grid[index] in ['wumpus', 'pit']:
-                print(f"You encountered a {grid[index]} and died! Restart at (1,1)")
+                print(f"You died! Restart at (1,1)")
                 self.infer_cause_of_death(self.x, self.y)  # 추가: 죽음 추론
                 percepts = self.perceive(self.x, self.y)
                 self.update_knowledge(self.x, self.y, percepts)
                 # 죽으면 (1,1)로 초기화 (KB와 화살은 유지)
                 self.x, self.y = 1, 1
-                self.orientation = 'East'
+                self.choose_next_direction()
 
         else:
             bump = True
@@ -255,30 +272,29 @@ class Agent:
         percepts = self.perceive(self.x, self.y)
         percepts[3] = bump  # Update bump
 
-
         if (self.x, self.y) == (1, 1) and self.has_gold: # 좌표가 (1,1)이고 금을 가지고 있으면 climb
             self.Climb()
         elif percepts[2]:  # 금이 있으면 grab
             self.Grab()
 
-        self.update_knowledge(self.x, self.y, percepts)
-        percepts[4] = self.scream # KB 업데이트시 scream==True였다면 상태를 업데이트하고 scream==False로 바꾸기 때문에 갱신 필요
+        #self.update_knowledge(self.x, self.y, percepts)
+        #percepts[4] = self.scream # KB 업데이트시 scream==True였다면 상태를 업데이트하고 scream==False로 바꾸기 때문에 갱신 필요
 
-        print_percepts(percepts)
-        print_grid(grid)
-        print_knowledge()
-
-        if self.arrow_count > 0:  # 화살이 남아있고, 에이전트가 바라보는 방향의 동일선상에 wumpus가 있으면 shoot
+        if self.arrow_count > 0:  # 화살이 남아있고, 에이전트가 바라보는 방향의 동일선상에 'Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'가 있으면 shoot
             dx, dy = MOVE_DELTA[self.orientation]
             x, y = self.x + dx, self.y + dy
             while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
                 if knowledge.get((x, y), {}).get('status', '') in ('Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'):
                     self.Shoot()
-                    percepts[4] = self.scream # Shoot 실행시 wumpus를 제거하고 scream==True로 바꾸기 때문에 갱신 필요
-                    self.update_knowledge(self.x, self.y, percepts)
+                    percepts = self.perceive(self.x, self.y)
+                    percepts[4] = self.scream # Shoot 실행시 wumpus를 제거하면 scream==True로 바꾸기 때문에 갱신 필요
                     break
                 x += dx
                 y += dy
+        self.update_knowledge(self.x, self.y, percepts)
+        print_percepts(percepts)
+        print_grid(grid)
+        print_knowledge()
 
         return percepts
 
@@ -313,12 +329,10 @@ class Agent:
                 self.scream = True
                 self.wumpus_killed_pos = (x, y)
                 print(f"You killed the wumpus at ({x},{y})!")
-                percepts = self.perceive(self.x, self.y)
-                print_percepts(percepts)
                 break
             x += dx
             y += dy
-        else:  # 화살이 지나간 경로에 있는 MaybeW / MaybeWP를 업데이트
+        else:  # 화살이 지나간 경로에 있는 MaybeW / MaybeWP / WumpusOrPit을 업데이트
             x, y = self.x + dx, self.y + dy
             while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
                 cell = knowledge.get((x, y))
@@ -328,6 +342,8 @@ class Agent:
                         cell['status'] = 'Safe'
                     elif status == 'MaybeWP':
                         cell['status'] = 'MaybeP'
+                    elif status == 'WumpusOrPit':
+                        cell['status'] = 'Pit'
                 x += dx
                 y += dy
             print("There was no wumpus. Updated KB")
@@ -346,6 +362,23 @@ def update_grid_with_agent():
             grid[i] = 'empty'
         grid[agent.get_index()] = 'A'
 
+# Knowledge print function
+def print_knowledge():
+    print("----------------------------------\n<Knowledge Base>")
+    for y in range(1, WORLD_SIZE + 1):
+        for x in range(1, WORLD_SIZE + 1):
+            info = knowledge.get((x, y), {'status': 'Unknown', 'visited': False})
+            status = info['status']
+            visited = 'T' if info['visited'] else 'F'
+            print(f"[{x},{y}] : {status}, {visited}")
+    print("----------------------------------\n")
+
+def print_percepts(percepts):
+    stench, breeze, glitter, bump, scream = percepts
+    print("----------------------------------\n<Percepts>")
+    print(f"Stench: {stench}, Breeze: {breeze}, Glitter: {glitter}, Bump: {bump}, Scream: {scream}")
+    print("----------------------------------")
+
 # Grid print function
 def print_grid(grid):
     update_grid_with_agent()
@@ -363,12 +396,10 @@ def print_grid(grid):
                 row += "#  "
             elif grid[index] == 'A':
                 row += "A  "
-            elif grid[index] == 'gold':
-                row += "G  "
-            elif grid[index] == 'wumpus':
-                row += "W  "
-            elif grid[index] == 'pit':
-                row += "P  "
+            # elif grid[index] == 'wumpus':
+            #    row += "W  "
+            # elif grid[index] == 'pit':
+            #    row += "P  "
             else:
                 if (1 <= kb_x <= WORLD_SIZE) and (1 <= kb_y <= WORLD_SIZE):
                     if status == 'Safe':
@@ -391,34 +422,34 @@ def print_grid(grid):
                     row += "?  "
         print(row)
 
+def print_solution_grid(grid):
+    print("----------------------------------\n<Solution Grid>")
+    for y in range(GRID_SIZE):
+        row = ""
+        for x in range(GRID_SIZE):
+            index = y * GRID_SIZE + x
+            if grid[index] == 'wall':
+                row += "#  "
+            elif grid[index] == 'gold':
+                row += "G  "
+            elif grid[index] == 'wumpus':
+                row += "W  "
+            elif grid[index] == 'pit':
+                row += "P  "
+            else:
+                row += "-  "
+        print(row)
 
-# Knowledge print function
-def print_knowledge():
-    print("----------------------------------\n<Knowledge Base>")
-    for y in range(1, WORLD_SIZE + 1):
-        for x in range(1, WORLD_SIZE + 1):
-            info = knowledge.get((x, y), {'status': 'Unknown', 'visited': False})
-            status = info['status']
-            visited = 'T' if info['visited'] else 'F'
-            print(f"[{x},{y}] : {status}, {visited}")
-    print("----------------------------------\n")
+def main():
+    print_solution_grid(grid)
 
+    print_grid(grid)
+    print_knowledge()
 
+    climb_success = False
+    for _ in range(200):  # 20번만 실행
+        agent.GoForward()
+    if not climb_success: print("Agent is stuck!")
 
-def print_percepts(percepts):
-    stench, breeze, glitter, bump, scream = percepts
-    print("----------------------------------\n<Percepts>")
-    print(f"Stench: {stench}, Breeze: {breeze}, Glitter: {glitter}, Bump: {bump}, Scream: {scream}")
-    print("----------------------------------")
-
-
-print_grid(grid)
-print_knowledge()
-# 메인 루프
-#while True:
-#    agent.GoForward()
-
-climb_success = False
-for _ in range(200):  # 20번만 실행
-    agent.GoForward()
-if not climb_success: print("Agent is stuck!")
+if __name__ == "__main__":
+    main()
