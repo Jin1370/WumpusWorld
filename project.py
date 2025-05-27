@@ -19,10 +19,9 @@ for y in range(1, WORLD_SIZE + 1):
         grid[index] = 'empty'
 
 # Add wumpus and pit for testing
-grid[7] = 'wumpus'
+grid[27] = 'wumpus'
 grid[15] = 'wumpus'
-grid[8] = 'pit'
-grid[22] = 'pit'
+grid[19] = 'pit'
 grid[16] = 'gold'
 
 knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
@@ -118,21 +117,21 @@ class Agent:
     def infer_cause_of_death(self, x, y):
         cause = knowledge.get((x, y), {}).get('status', 'Unknown')
         if cause == 'MaybeW':
-            print(f"Agent likely died from Wumpus at ({x},{y}). Updating KB.")
+            print("Agent likely died from Wumpus. Updating KB.")
             knowledge[(x, y)]['status'] = 'Wumpus'
-            # KB의 모든 MaybeW를 Unknown으로
+            # KB의 모든 MaybeW와 MaybeWP를 Unknown으로
             for key, value in knowledge.items():
-                if value['status'] == 'MaybeW':
+                if value['status'] in ('MaybeW', 'MaybeWP'):
                     value['status'] = 'Unknown'
         elif cause == 'MaybeP':
-            print(f"Agent likely died from Pit at ({x},{y}). Updating KB.")
+            print("Agent likely died from Pit. Updating KB.")
             knowledge[(x, y)]['status'] = 'Pit'
-            # KB의 모든 MaybeP을 Unknown으로
+            # KB의 모든 MaybeP와 MaybeWP를 Unknown으로
             for key, value in knowledge.items():
-                if value['status'] == 'MaybeP':
+                if value['status'] in ('MaybeP', 'MaybeWP'):
                     value['status'] = 'Unknown'
         elif cause == 'MaybeWP':
-            print(f"Agent died at ({x},{y}), cause unknown.")
+            print("cause unknown.")
             knowledge[(x, y)]['status'] = 'WumpusOrPit'
             # KB의 모든 MaybeWP을 Unknown으로
             for key, value in knowledge.items():
@@ -263,7 +262,7 @@ class Agent:
             self.Grab()
 
         self.update_knowledge(self.x, self.y, percepts)
-        percepts[4] = self.scream # KB 업데이트시 scream==True였다면, 상태가 wumpus였던 좌표를 safe로, scream==False로 바꾸기 때문에 갱신 필요
+        percepts[4] = self.scream # KB 업데이트시 scream==True였다면 상태를 업데이트하고 scream==False로 바꾸기 때문에 갱신 필요
 
         print_percepts(percepts)
         print_grid(grid)
@@ -295,7 +294,6 @@ class Agent:
 
     def Grab(self):
         index = self.get_index()
-        print(grid[index])
         if grid[index] == 'gold':
             self.has_gold = True
             grid[index] = 'empty'
@@ -315,10 +313,24 @@ class Agent:
                 self.scream = True
                 self.wumpus_killed_pos = (x, y)
                 print(f"You killed the wumpus at ({x},{y})!")
+                percepts = self.perceive(self.x, self.y)
+                print_percepts(percepts)
                 break
             x += dx
             y += dy
-        print("There was no wumpus")
+        else:  # 화살이 지나간 경로에 있는 MaybeW / MaybeWP를 업데이트
+            x, y = self.x + dx, self.y + dy
+            while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
+                cell = knowledge.get((x, y))
+                if cell:
+                    status = cell.get('status')
+                    if status == 'MaybeW':
+                        cell['status'] = 'Safe'
+                    elif status == 'MaybeWP':
+                        cell['status'] = 'MaybeP'
+                x += dx
+                y += dy
+            print("There was no wumpus. Updated KB")
 
     def Climb(self):
         print(f"Success! Escaped with the gold in {self.move_count} moves!")
@@ -378,7 +390,7 @@ def print_grid(grid):
                 else:
                     row += "?  "
         print(row)
-    print("----------------------------------")
+
 
 # Knowledge print function
 def print_knowledge():
@@ -406,5 +418,7 @@ print_knowledge()
 #while True:
 #    agent.GoForward()
 
-for _ in range(300):  # 20번만 실행
+climb_success = False
+for _ in range(200):  # 20번만 실행
     agent.GoForward()
+if not climb_success: print("Agent is stuck!")
