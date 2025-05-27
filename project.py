@@ -19,9 +19,11 @@ for y in range(1, WORLD_SIZE + 1):
         grid[index] = 'empty'
 
 # Add wumpus and pit for testing
-grid[21] = 'wumpus'
+grid[7] = 'wumpus'
+grid[15] = 'wumpus'
 grid[8] = 'pit'
-grid[22] = 'gold'
+grid[22] = 'pit'
+grid[16] = 'gold'
 
 knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
 
@@ -33,6 +35,7 @@ class Agent:
         self.has_gold = False
         self.arrow_count = 3
         self.scream = False
+        self.move_count = 0
 
         # Initialize KB with starting position percept
         percepts = self.perceive(self.x, self.y)
@@ -46,7 +49,7 @@ class Agent:
         return grid_y * GRID_SIZE + x
 
     def perceive(self, x, y):
-        index = self.get_index()
+        index = self.get_index(x, y)
         stench = False
         breeze = False
         glitter = (grid[index] == 'gold')
@@ -151,7 +154,8 @@ class Agent:
             ]
         else:
             priorities = [
-                ('Safe', None),  # True or False 모두 포함
+                ('Safe', True),  # True or False 모두 포함
+                ('Safe', False),
                 ('MaybeW', False),
                 ('MaybeP', False),
                 ('MaybeWP', False),
@@ -166,25 +170,23 @@ class Agent:
             candidates = []  # 각 레벨별 후보 리스트
             for dir, (dx, dy) in MOVE_DELTA.items():
                 nx, ny = self.x + dx, self.y + dy
-                if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
-                    cell = knowledge.get((nx,ny), {})
-
-                    # Status 체크
-                    cell_status = cell.get('status')
-                    if status == 'WumpusPit':
-                        if cell_status in ['Wumpus', 'Pit', 'WumpusOrPit']:
-                            pass
-                        else:
-                            continue
+                cell = knowledge.get((nx,ny), {})
+                # Status 체크
+                cell_status = cell.get('status')
+                if status == 'WumpusPit':
+                    if cell_status in ['Wumpus', 'Pit', 'WumpusOrPit']:
+                        pass
                     else:
-                        if cell_status != status:
-                            continue
-
-                    # Visited 체크
-                    if visited is not None and cell.get('visited') != visited:
+                        continue
+                else:
+                    if cell_status != status:
                         continue
 
-                    candidates.append((nx, ny, dir))
+                # Visited 체크
+                if visited is not None and cell.get('visited') != visited:
+                    continue
+
+                candidates.append((nx, ny, dir))
 
             if candidates:
                 best_candidates = candidates
@@ -192,6 +194,11 @@ class Agent:
 
         # 후보 중 랜덤 선택
         if best_candidates:
+            # for Bump test
+            # for dir, (dx, dy) in MOVE_DELTA.items():
+            #    nx, ny = self.x + dx, self.y + dy
+            #    if not (1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE):
+            #        best_candidates.append((nx, ny, dir))
             target = random.choice(best_candidates)
             target_x, target_y, best_dir = target
 
@@ -229,6 +236,7 @@ class Agent:
         if 1 <= new_x <= WORLD_SIZE and 1 <= new_y <= WORLD_SIZE:
             self.x = new_x
             self.y = new_y
+            self.move_count += 1
             print(f"Moved to ({self.x}, {self.y}) facing {self.orientation}")
 
             index = self.get_index()
@@ -253,11 +261,6 @@ class Agent:
             self.Climb()
         elif percepts[2]:  # 금이 있으면 grab
             self.Grab()
-        elif bump:  # 벽에 부딪히면 TurnLeft와 TurnRight 중 랜덤으로 선택해 수행
-            if random.choice([True, False]):
-                self.TurnLeft()
-            else:
-                self.TurnRight()
 
         self.update_knowledge(self.x, self.y, percepts)
         percepts[4] = self.scream # KB 업데이트시 scream==True였다면, 상태가 wumpus였던 좌표를 safe로, scream==False로 바꾸기 때문에 갱신 필요
@@ -318,10 +321,8 @@ class Agent:
         print("There was no wumpus")
 
     def Climb(self):
-        if (self.x, self.y) == (1, 1):
-            if self.has_gold:
-                print("Climbed out with the gold!")
-                exit()
+        print(f"Success! Escaped with the gold in {self.move_count} moves!")
+        exit()
 
 # Initialize agent
 agent = Agent(1, 1, 'East')
@@ -405,5 +406,5 @@ print_knowledge()
 #while True:
 #    agent.GoForward()
 
-for _ in range(100):  # 20번만 실행
+for _ in range(300):  # 20번만 실행
     agent.GoForward()
