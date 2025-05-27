@@ -20,7 +20,7 @@ for y in range(1, WORLD_SIZE + 1):
 
 # Add wumpus and pit for testing
 grid[21] = 'wumpus'
-grid[28] = 'pit'
+grid[8] = 'pit'
 grid[22] = 'gold'
 
 knowledge = {}  # (x, y): 'Safe', 'Wumpus', 'Pit', etc.
@@ -101,9 +101,13 @@ class Agent:
 
         if scream and hasattr(self, 'wumpus_killed_pos'):
             wx, wy = self.wumpus_killed_pos
-            if knowledge.get((wx, wy), {}).get('status') == 'Wumpus':
+            if knowledge.get((wx, wy), {}).get('status') in ('Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'):
                 knowledge[(wx, wy)]['status'] = 'Safe'
-                print(f"Since Scream==True, update KB: ({wx},{wy}) -> Safe")
+                # KB의 모든 MaybeW, MaybeWP를 Unknown으로
+                for key, value in knowledge.items():
+                    if value['status'] in ('MaybeW', 'MaybeWP'):
+                        value['status'] = 'Unknown'
+                print(f"Since Scream==True, update KB")
             self.scream = False
             self.wumpus_killed_pos = None
 
@@ -131,8 +135,6 @@ class Agent:
             for key, value in knowledge.items():
                 if value['status'] == 'MaybeWP':
                     value['status'] = 'Unknown'
-
-    ###################################
 
     def choose_next_direction(self):
         priorities = []
@@ -214,7 +216,6 @@ class Agent:
         elif diff == 3:
             self.TurnLeft()
 
-###################################
     def GoForward(self):
         #next_status = knowledge.get((new_x, new_y), {}).get('status', 'Unknown')
         #if next_status != 'Safe':
@@ -246,8 +247,7 @@ class Agent:
 
         percepts = self.perceive(self.x, self.y)
         percepts[3] = bump  # Update bump
-        self.update_knowledge(self.x, self.y, percepts)
-        percepts[4] = self.scream # KB 업데이트시 scream==True였다면, 상태가 wumpus였던 좌표를 safe로, scream==False로 바꾸기 때문에 갱신 필요
+
 
         if (self.x, self.y) == (1, 1) and self.has_gold: # 좌표가 (1,1)이고 금을 가지고 있으면 climb
             self.Climb()
@@ -258,20 +258,25 @@ class Agent:
                 self.TurnLeft()
             else:
                 self.TurnRight()
-        elif self.arrow_count > 0:  # 화살이 남아있고, 에이전트가 바라보는 방향의 동일선상에 wumpus가 있으면 shoot
-            dx, dy = MOVE_DELTA[self.orientation]
-            x, y = self.x + dx, self.y + dy
-            while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
-                if knowledge.get((x, y), {}).get('status', '') == 'Wumpus':
-                    self.Shoot()
-                    percepts[4] = self.scream # Shoot 실행시 wumpus를 제거하고 scream==True로 바꾸기 때문에 갱신 필요
-                    break
-                x += dx
-                y += dy
+
+        self.update_knowledge(self.x, self.y, percepts)
+        percepts[4] = self.scream # KB 업데이트시 scream==True였다면, 상태가 wumpus였던 좌표를 safe로, scream==False로 바꾸기 때문에 갱신 필요
 
         print_percepts(percepts)
         print_grid(grid)
         print_knowledge()
+
+        if self.arrow_count > 0:  # 화살이 남아있고, 에이전트가 바라보는 방향의 동일선상에 wumpus가 있으면 shoot
+            dx, dy = MOVE_DELTA[self.orientation]
+            x, y = self.x + dx, self.y + dy
+            while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
+                if knowledge.get((x, y), {}).get('status', '') in ('Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'):
+                    self.Shoot()
+                    percepts[4] = self.scream # Shoot 실행시 wumpus를 제거하고 scream==True로 바꾸기 때문에 갱신 필요
+                    self.update_knowledge(self.x, self.y, percepts)
+                    break
+                x += dx
+                y += dy
 
         return percepts
 
@@ -296,9 +301,6 @@ class Agent:
             print("No gold here.")
 
     def Shoot(self):
-        if self.arrow_count <= 0:
-            print("No arrows left.")
-            return
         self.arrow_count -= 1
         print(f"Shot an arrow! Remaining arrows: {self.arrow_count}")
         dx, dy = MOVE_DELTA[self.orientation]
@@ -313,6 +315,7 @@ class Agent:
                 break
             x += dx
             y += dy
+        print("There was no wumpus")
 
     def Climb(self):
         if (self.x, self.y) == (1, 1):
@@ -402,5 +405,5 @@ print_knowledge()
 #while True:
 #    agent.GoForward()
 
-for _ in range(20):  # 20번만 실행
+for _ in range(100):  # 20번만 실행
     agent.GoForward()
