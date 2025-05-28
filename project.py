@@ -22,7 +22,7 @@ for y in range(1, WORLD_SIZE + 1):
         index = grid_y * GRID_SIZE + x
         grid[index] = 'empty'
 
-        if index == 25:  # (1,1)에는 아무것도 생성되지 않음
+        if index == 25:  # (1,1)에는 생성 X
             continue
 
         has_wumpus = random.random() < WUMPUS_PROB
@@ -40,22 +40,23 @@ if safe_indices:
     grid[gold_index] = 'gold'
 
 '''
-#grid[19] = 'wumpus'
+grid[20] = 'pit'
+grid[19] = 'pit'
 grid[26] = 'wumpus'
-grid[15] = 'pit'
+grid[28] = 'wumpus'
 grid[8] = 'gold'
 '''
 
 kb = {}
 
-# Grid update function
+
 def update_grid_with_agent():
     for i in range(len(grid)):
         if grid[i] == 'A':
             grid[i] = 'empty'
         grid[agent.get_index()] = 'A'
 
-# kb print function
+
 def print_kb():
     print("----------------------------------\n<Knowledge Base>")
     for y in range(1, WORLD_SIZE + 1):
@@ -67,8 +68,6 @@ def print_kb():
     print("----------------------------------\n")
 
 
-
-# Grid print function
 def print_grid(grid):
     update_grid_with_agent()
     print("----------------------------------\n<Grid>")
@@ -111,8 +110,9 @@ def print_grid(grid):
                     row += "?  "
         print(row)
 
+
 def print_solution_grid(grid):
-    print("----------------------------------\n<Solution Grid>")
+    print("----------------------------------\n<Locations of Wumpus, Pit, Gold>")
     for y in range(GRID_SIZE):
         row = ""
         for x in range(GRID_SIZE):
@@ -153,7 +153,6 @@ class Agent:
         self.update_kb(self.x, self.y, percepts)
         print_percepts(percepts)
 
-    # 매개변수로 x,y를 주면 해당 좌표의 index 반환, 안주면 현재 좌표의 index 반환
     def get_index(self, x=None, y=None):
         x = x if x is not None else self.x
         y = y if y is not None else self.y
@@ -168,7 +167,6 @@ class Agent:
         bump = False
         scream = self.scream
 
-        # Check adjacent cells
         for dx, dy in MOVE_DELTA.values():
             nx, ny = self.x + dx, self.y + dy
             if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
@@ -192,10 +190,11 @@ class Agent:
         index = self.get_index(x, y)
         cell = grid[index]
 
-        if (cell != 'wumpus') and (cell != 'pit'):  # 에이전트가 죽지 않은 경우
+        if (cell != 'wumpus') and (cell != 'pit'):  # 에이전트가 죽지 않은 경우 실행
             if kb.get((x, y), 'Unknown') != 'Safe':
-                kb[(x, y)]['status'] = 'Safe'
-            # 인접한 칸 state 업데이트
+                kb[(x, y)]['status'] = 'Safe'  # 현재 칸 state를 Safe로 저장
+
+            # 인접한 칸의 state 업데이트
             for dx, dy in MOVE_DELTA.values():
                 nx, ny = x + dx, y + dy
                 if 1 <= nx <= WORLD_SIZE and 1 <= ny <= WORLD_SIZE:
@@ -214,37 +213,45 @@ class Agent:
                     elif breeze and stench and neighbor_status == 'Unknown':
                         kb[(nx, ny)]['status'] = 'MaybeWP'
 
-        if scream and hasattr(self, 'wumpus_killed_pos'):
-            wx, wy = self.wumpus_killed_pos
-            if kb.get((wx, wy), {}).get('status') in ('Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'):
-                kb[(wx, wy)]['status'] = 'Safe'
-                # KB의 모든 MaybeW, MaybeWP를 Unknown으로
-                for key, value in kb.items():
-                    if value['status'] in ('MaybeW', 'MaybeWP'):
-                        value['status'] = 'Unknown'
-                print(f"Since Scream==True, update KB")
+        if scream:  # scream==True, 즉 화살을 쏴서 wumpus가 죽은 경우
+            dx, dy = MOVE_DELTA[self.orientation]
+            x, y = self.x + dx, self.y + dy
+            # 화살을 쏜 방향에 있는 좌표들의 state(Wumpus, WumpusOrPit, MaybeW, MaybeWP) 중에서 첫 번째로 발견되는 state가 Wumpus인 경우, 해당 칸을 Safe로 변경
+            while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
+                current_status = kb.get((x, y), {}).get('status', '')
+                if current_status in ('Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'):
+                    if current_status == 'Wumpus':
+                        kb[(x, y)]['status'] = 'Safe'
+                    break
+                x += dx
+                y += dy
+            # KB의 모든 WumpusOrPit, MaybeW, MaybeWP을 Unknown으로 변경
+            for key, value in kb.items():
+                if value['status'] in ('WumpusOrPit', 'MaybeW', 'MaybeWP'):
+                    value['status'] = 'Unknown'
             self.scream = False
-            self.wumpus_killed_pos = None
 
     def infer_cause_of_death(self, x, y):
         cause = kb.get((x, y), {}).get('status', 'Unknown')
         if cause == 'MaybeW':
             print("Agent likely died from Wumpus. Updating KB.")
-            kb[(x, y)]['status'] = 'Wumpus'
-            # KB의 모든 MaybeW와 MaybeWP를 Unknown으로
+            kb[(x, y)]['status'] = 'Wumpus'  # 해당 칸을 Wumpus로 확정
+            # KB의 모든 MaybeW와 MaybeWP를 Unknown으로 변경
             for key, value in kb.items():
                 if value['status'] in ('MaybeW', 'MaybeWP'):
                     value['status'] = 'Unknown'
+
         elif cause == 'MaybeP':
             print("Agent likely died from Pit. Updating KB.")
-            kb[(x, y)]['status'] = 'Pit'
-            # KB의 모든 MaybeP와 MaybeWP를 Unknown으로
+            kb[(x, y)]['status'] = 'Pit'  # 해당 칸을 Pit으로 확정
+            # KB의 모든 MaybeP와 MaybeWP를 Unknown으로 변경
             for key, value in kb.items():
                 if value['status'] in ('MaybeP', 'MaybeWP'):
                     value['status'] = 'Unknown'
+
         elif cause == 'MaybeWP':
             print("cause unknown.")
-            kb[(x, y)]['status'] = 'WumpusOrPit'
+            kb[(x, y)]['status'] = 'WumpusOrPit'  # 해당 칸을 Wumpus나 Pit으로 확정지을 수 없음
             # KB의 모든 MaybeWP을 Unknown으로
             for key, value in kb.items():
                 if value['status'] == 'MaybeWP':
@@ -252,37 +259,40 @@ class Agent:
 
     def choose_next_direction(self):
         priorities = []
-
-        # 우선순위 정의
+        # kb의 (state, visited) 이용해 방문할 인접한 칸의 우선순위 결정
         if not self.has_gold:
             priorities = [
                 ('Safe', False),
+                ('Unknown', False),
                 ('MaybeW', False),
                 ('MaybeP', False),
                 ('MaybeWP', False),
                 ('Safe', True),
-                ('WumpusPit', True)
+                ('Unknown', True),
+                ('MaybeW', True),
+                ('MaybeP', True),
+                ('MaybeWP', True),
+                ('WumpusPit', None)  # None: True, False 상관 X
             ]
         else:
             priorities = [
-                ('Safe', True),  # True or False 모두 포함
-                ('Safe', False),
-                ('MaybeW', False),
-                ('MaybeP', False),
-                ('MaybeWP', False),
-                ('WumpusPit', True)
+                ('Safe', None),
+                ('Unknown', None),
+                ('MaybeW', None),
+                ('MaybeP', None),
+                ('MaybeWP', None),
+                ('WumpusPit', None)
             ]
 
         best_target = None
         best_dir = None
-        best_candidates = []  # 후보를 저장할 리스트
+        best_candidates = []
 
         for status, visited in priorities:
-            candidates = []  # 각 레벨별 후보 리스트
+            candidates = []
             for dir, (dx, dy) in MOVE_DELTA.items():
                 nx, ny = self.x + dx, self.y + dy
                 cell = kb.get((nx,ny), {})
-                # Status 체크
                 cell_status = cell.get('status')
                 if status == 'WumpusPit':
                     if cell_status in ['Wumpus', 'Pit', 'WumpusOrPit']:
@@ -293,7 +303,6 @@ class Agent:
                     if cell_status != status:
                         continue
 
-                # Visited 체크
                 if visited is not None and cell.get('visited') != visited:
                     continue
 
@@ -301,7 +310,7 @@ class Agent:
 
             if candidates:
                 best_candidates = candidates
-                break  # 우선순위 레벨에서 후보 찾았으면 종료
+                break
 
         # 후보 중 랜덤 선택
         if best_candidates:
@@ -348,11 +357,10 @@ class Agent:
             index = self.get_index()
             if grid[index] in ['wumpus', 'pit']:
                 print(f"You died! Restart at (1,1)")
-                self.infer_cause_of_death(self.x, self.y)  # 추가: 죽음 추론
+                self.infer_cause_of_death(self.x, self.y)
                 percepts = self.perceive(self.x, self.y)
                 self.update_kb(self.x, self.y, percepts)
-                # 죽으면 (1,1)로 초기화 (KB와 화살은 유지)
-                self.x, self.y = 1, 1
+                self.x, self.y = 1, 1  # 죽으면 (1,1)로 초기화 (KB와 화살은 유지)
                 # self.orientation = 'East'
                 self.choose_next_direction()
 
@@ -363,7 +371,7 @@ class Agent:
         percepts = self.perceive(self.x, self.y)
         percepts[3] = bump  # Update bump
 
-        if (self.x, self.y) == (1, 1) and self.has_gold: # 좌표가 (1,1)이고 금을 가지고 있으면 climb
+        if (self.x, self.y) == (1, 1) and self.has_gold:  # 좌표가 (1,1)이고 금을 가지고 있으면 climb
             self.Climb()
         elif percepts[2]:  # 금이 있으면 grab
             self.Grab()
@@ -374,12 +382,12 @@ class Agent:
             while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
                 if kb.get((x, y), {}).get('status', '') in ('Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'):
                     self.Shoot()
-                    percepts = self.perceive(self.x, self.y) # Shoot 실행시 wumpus가 제거되면 stench에 대한 정보가 바뀜 -> percept 다시 수행
+                    percepts = self.perceive(self.x, self.y)  # Shoot 실행시 wumpus가 제거되면 stench에 대한 정보가 바뀜 -> percept 다시 수행
                     break
                 x += dx
                 y += dy
 
-        self.update_kb(self.x, self.y, percepts) # scream==True였다면 kb 업데이트 후 다시 false가 됨
+        self.update_kb(self.x, self.y, percepts)  # scream==True였다면 kb 업데이트 후 다시 false가 됨
         print_percepts(percepts)
         print_grid(grid)
         print_kb()
@@ -413,12 +421,11 @@ class Agent:
             if grid[idx] == 'wumpus':
                 grid[idx] = 'empty'
                 self.scream = True
-                self.wumpus_killed_pos = (x, y)
                 print(f"You killed the wumpus!")
                 break
             x += dx
             y += dy
-        else:  # 화살이 지나간 경로에 있는 MaybeW / MaybeWP / WumpusOrPit을 업데이트
+        else:  # 화살이 지나간 경로에 있는 MaybeW / MaybeWP / WumpusOrPit 업데이트
             x, y = self.x + dx, self.y + dy
             while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
                 cell = kb.get((x, y))
@@ -432,11 +439,12 @@ class Agent:
                         cell['status'] = 'Pit'
                 x += dx
                 y += dy
-            print("There was no wumpus. Updated KB")
+            print("There was no wumpus.")
 
     def Climb(self):
         print(f"Success! Escaped with the gold in {self.move_count} moves!")
         exit()
+
 
 # Initialize agent
 agent = Agent(1, 1, 'East')
@@ -446,9 +454,11 @@ def main():
     print_kb()
 
     climb_success = False
-    for _ in range(500):  # 20번만 실행
+    for _ in range(500):
         agent.GoForward()
-    if not climb_success: print("Agent is stuck!")
+    if not climb_success:
+        print("Agent is stuck!")
+
 
 if __name__ == "__main__":
     main()
