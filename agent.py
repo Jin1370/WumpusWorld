@@ -373,7 +373,7 @@ class Agent:
         while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
             idx = self.get_index(x, y)
             if grid[idx] == 'wumpus':
-                grid[idx] = 'empty'
+                grid[idx] = 'empty'  # 화살 쏜 방향에 있는 wumpus 중 화살과 처음 마주하는 wumpus를 삭제
                 self.scream = True
                 print(f"You killed the wumpus!")
                 break
