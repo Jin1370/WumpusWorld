@@ -13,7 +13,7 @@ for y in range(1, WORLD_SIZE + 1):
         grid_y = GRID_SIZE - y - 1
         index = grid_y * GRID_SIZE + x
         grid[index] = 'empty'
-'''
+
         if index == 25 or index == 26 or index == 19:  # (1,1), (1,2), (2,1)에는 생성 X
             continue
 
@@ -34,3 +34,4 @@ if safe_indices:
 grid[13] = 'pit'
 grid[27] = 'wumpus'
 grid[8] = 'gold'
+'''
