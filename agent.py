@@ -312,8 +312,6 @@ class Agent:
             if grid[index] in ['wumpus', 'pit']:
                 print(f"You died! Restart at (1,1)")
                 self.infer_cause_of_death(self.x, self.y)
-                percepts = self.perceive(self.x, self.y)
-                self.update_kb(self.x, self.y, percepts)
                 self.x, self.y = 1, 1  # 죽으면 (1,1)로 초기화 (KB와 화살은 유지)
                 # self.orientation = 'East'
                 self.choose_next_direction()
@@ -330,13 +328,13 @@ class Agent:
         elif percepts[2]:  # 금이 있으면 grab
             self.Grab()
 
-        if self.arrow_count > 0:  # 화살이 남아있고, 에이전트가 바라보는 방향의 동일선상에 'Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'가 있으면 shoot
+        if self.arrow_count > 0:
             dx, dy = MOVE_DELTA[self.orientation]
             x, y = self.x + dx, self.y + dy
             while 1 <= x <= WORLD_SIZE and 1 <= y <= WORLD_SIZE:
                 if kb.get((x, y), {}).get('status', '') in ('Wumpus', 'WumpusOrPit', 'MaybeW', 'MaybeWP'):
                     self.Shoot()
-                    percepts = self.perceive(self.x, self.y)  # Shoot 실행시 wumpus가 제거되면 stench에 대한 정보가 바뀜 -> percept 다시 수행
+                    percepts = self.perceive(self.x, self.y)
                     break
                 x += dx
                 y += dy
