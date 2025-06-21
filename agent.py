@@ -45,7 +45,7 @@ def print_grid(grid):
             else:
                 if (1 <= kb_x <= WORLD_SIZE) and (1 <= kb_y <= WORLD_SIZE):
                     if status == 'Safe':
-                        row += "S  "
+                        row += "OK "
                     elif status == 'Wumpus':
                         row += "W! "
                     elif status == 'Pit':
@@ -100,6 +100,8 @@ class Agent:
         self.arrow_count = 3
         self.scream = False
         self.move_count = 0
+        self.path_stack = []
+        self.returning = False
 
         print_solution_grid(grid)
         # Initialize KB with starting position percept
@@ -214,29 +216,19 @@ class Agent:
     def choose_next_direction(self):
         priorities = []
         # kb의 (state, visited) 이용해 방문할 인접한 칸의 우선순위 결정
-        if not self.has_gold:
-            priorities = [
-                ('Safe', False),
-                ('Unknown', False),
-                ('MaybeW', False),
-                ('MaybeP', False),
-                ('MaybeWP', False),
-                ('Safe', True),
-                ('Unknown', True),
-                ('MaybeW', True),
-                ('MaybeP', True),
-                ('MaybeWP', True),
-                ('WumpusPit', None)  # None: True, False 상관 X
-            ]
-        else:
-            priorities = [
-                ('Safe', None),
-                ('Unknown', None),
-                ('MaybeW', None),
-                ('MaybeP', None),
-                ('MaybeWP', None),
-                ('WumpusPit', None)
-            ]
+        priorities = [
+            ('Safe', False),
+            ('Unknown', False),
+            ('MaybeW', False),
+            ('MaybeP', False),
+            ('MaybeWP', False),
+            ('Safe', True),
+            ('Unknown', True),
+            ('MaybeW', True),
+            ('MaybeP', True),
+            ('MaybeWP', True),
+            ('WumpusPit', None)  # None: True, False 상관 X
+        ]
 
         best_target = None
         best_dir = None
@@ -295,6 +287,35 @@ class Agent:
             self.TurnLeft()
 
     def GoForward(self):
+        # 돌아가는 중일 경우 스택에서 다음 좌표를 꺼내 이동
+        if self.returning and self.path_stack:
+            next_x, next_y = self.path_stack.pop()
+            dx = next_x - self.x
+            dy = next_y - self.y
+
+            for dir, delta in MOVE_DELTA.items():
+                if delta == (dx, dy):
+                    self.turn_to_direction(dir)
+                    break
+
+            self.x = next_x
+            self.y = next_y
+            self.move_count += 1
+            print(f"Moved to ({self.x}, {self.y})")
+
+            bump = False
+            percepts = self.perceive(self.x, self.y)
+            percepts[3] = bump  # bump
+
+            if (self.x, self.y) == (1, 1):
+                self.Climb()
+
+            self.update_kb(self.x, self.y, percepts)
+            print_percepts(percepts)
+            print_grid(grid)
+            print_kb()
+            return
+
         self.choose_next_direction()
 
         dx, dy = MOVE_DELTA[self.orientation]
@@ -303,6 +324,7 @@ class Agent:
         bump = False
 
         if 1 <= new_x <= WORLD_SIZE and 1 <= new_y <= WORLD_SIZE:
+            self.path_stack.append((self.x, self.y))  # 이동 전 위치 push
             self.x = new_x
             self.y = new_y
             self.move_count += 1
@@ -312,6 +334,9 @@ class Agent:
             if grid[index] in ['wumpus', 'pit']:
                 print(f"You died! Restart at (1,1)")
                 self.infer_cause_of_death(self.x, self.y)
+                percepts = self.perceive(self.x, self.y)
+                self.update_kb(self.x, self.y, percepts)
+                self.path_stack.clear()  # 죽으면 경로 초기화
                 self.x, self.y = 1, 1  # 죽으면 (1,1)로 초기화 (KB와 화살은 유지)
                 # self.orientation = 'East'
                 self.choose_next_direction()
@@ -323,9 +348,7 @@ class Agent:
         percepts = self.perceive(self.x, self.y)
         percepts[3] = bump  # Update bump
 
-        if (self.x, self.y) == (1, 1) and self.has_gold:  # 좌표가 (1,1)이고 금을 가지고 있으면 climb
-            self.Climb()
-        elif percepts[2]:  # 금이 있으면 grab
+        if percepts[2]:  # 금이 있으면 grab
             self.Grab()
 
         if self.arrow_count > 0:
@@ -359,9 +382,8 @@ class Agent:
         if grid[index] == 'gold':
             self.has_gold = True
             grid[index] = 'empty'
+            self.returning = True
             print("Grabbed the gold!")
-        else:
-            print("No gold here.")
 
     def Shoot(self):
         self.arrow_count -= 1
